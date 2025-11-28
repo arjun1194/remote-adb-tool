@@ -43,12 +43,16 @@ export class ClientManager {
       // Try 'adb-remote list --json' OR 'cat .remote-adb.json'
       const cmd = 'adb-remote list --json || cat .remote-adb.json';
 
-      const { stdout } = await execa('ssh', [
+      const sshArgs = [
         ...this.getSshControlOptions(),
         host,
         cmd
-      ]);
+      ];
+      console.log(chalk.dim(`[VERBOSE] Executing SSH: ssh ${sshArgs.join(' ')}`));
 
+      const { stdout } = await execa('ssh', sshArgs);
+
+      console.log(chalk.dim(`[VERBOSE] Remote devices raw output: ${stdout}`));
       return JSON.parse(stdout);
     } catch (error: any) {
       console.error(chalk.red(`Failed to fetch devices from ${host}.`));
@@ -58,25 +62,31 @@ export class ClientManager {
   }
 
   async connectDevice(host: string, device: ExposedDevice, existingTunnel?: ActiveTunnel): Promise<ActiveTunnel> {
-    if (existingTunnel) return existingTunnel;
+    if (existingTunnel) {
+      console.log(chalk.dim(`[VERBOSE] Using existing tunnel for ${device.serial}`));
+      return existingTunnel;
+    }
 
     // Find a free local port (simple increment for now, can be improved)
     // actually we can use the same port number as remote if available, else increment
     let localPort = device.port;
     // Check if port is taken? Net check would be better, but let's try blindly or use a helper.
-    // For simplicity, we try to match remote port. 
+    // For simplicity, we try to match remote port.
 
     // Start SSH Tunnel
     // ssh -N -L <local>:127.0.0.1:<remote> <host>
     console.log(chalk.dim(`  Starting tunnel ${localPort} -> ${device.port}...`));
 
-    // Use the same control options to reuse the master connection
-    const subprocess = execa('ssh', [
+    const tunnelArgs = [
       ...this.getSshControlOptions(),
       '-N',
       '-L', `${localPort}:127.0.0.1:${device.port}`,
       host
-    ], {
+    ];
+    console.log(chalk.dim(`[VERBOSE] Starting Tunnel: ssh ${tunnelArgs.join(' ')}`));
+
+    // Use the same control options to reuse the master connection
+    const subprocess = execa('ssh', tunnelArgs, {
       detached: true, // Keep running
       stdio: 'ignore'
     });
@@ -127,19 +137,21 @@ export class ClientManager {
 
     // ADB Disconnect
     try {
+      console.log(chalk.dim(`[VERBOSE] adb disconnect localhost:${tunnel.localPort}`));
       await execa('adb', ['disconnect', `localhost:${tunnel.localPort}`]);
     } catch { }
 
     // Kill SSH Tunnel
     if (tunnel.pid) {
       try {
+        console.log(chalk.dim(`[VERBOSE] Killing tunnel process ${tunnel.pid}`));
         process.kill(tunnel.pid);
       } catch (e) {
         // Process might already be gone
       }
     }
 
-    // Also try pkill pattern if pid is lost or unreliable? 
+    // Also try pkill pattern if pid is lost or unreliable?
     // For now rely on PID.
   }
 }
