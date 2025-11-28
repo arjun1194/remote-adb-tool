@@ -16,6 +16,15 @@ interface ActiveTunnel {
 const CLIENT_STATE_FILE = path.join(os.homedir(), '.remote-adb-client.json');
 
 export class ClientManager {
+  private getSshControlOptions(): string[] {
+    const controlPath = path.join(os.tmpdir(), 'remote-adb-ssh-%r@%h:%p');
+    return [
+      '-o', 'ControlMaster=auto',
+      '-o', `ControlPath=${controlPath}`,
+      '-o', 'ControlPersist=10m'
+    ];
+  }
+
   async getActiveTunnels(): Promise<ActiveTunnel[]> {
     try {
       return await fs.readJSON(CLIENT_STATE_FILE);
@@ -30,21 +39,21 @@ export class ClientManager {
 
   async fetchRemoteDevices(host: string): Promise<ExposedDevice[]> {
     try {
-      // Try using the CLI first
-      const { stdout } = await execa('ssh', [host, 'adb-remote list --json']);
+      // Combine commands to ensure single authentication and establish master connection
+      // Try 'adb-remote list --json' OR 'cat .remote-adb.json'
+      const cmd = 'adb-remote list --json || cat .remote-adb.json';
+      
+      const { stdout } = await execa('ssh', [
+        ...this.getSshControlOptions(),
+        host, 
+        cmd
+      ]);
+      
       return JSON.parse(stdout);
-    } catch (cliError: any) {
-      // If 'adb-remote' is not in PATH (common in non-interactive SSH),
-      // fallback to reading the state file directly.
-      try {
-        const { stdout } = await execa('ssh', [host, 'cat .remote-adb.json']);
-        return JSON.parse(stdout);
-      } catch (fileError: any) {
-        console.error(chalk.red(`Failed to fetch devices from ${host}.`));
-        console.error(chalk.yellow('Debug Info (CLI):'), cliError.stderr || cliError.message);
-        console.error(chalk.yellow('Debug Info (File):'), fileError.stderr || fileError.message);
-        return [];
-      }
+    } catch (error: any) {
+      console.error(chalk.red(`Failed to fetch devices from ${host}.`));
+      console.error(chalk.yellow('Debug Info:'), error.stderr || error.message);
+      return [];
     }
   }
 
@@ -61,7 +70,13 @@ export class ClientManager {
     // ssh -N -L <local>:127.0.0.1:<remote> <host>
     console.log(chalk.dim(`  Starting tunnel ${localPort} -> ${device.port}...`));
     
-    const subprocess = execa('ssh', ['-N', '-L', `${localPort}:127.0.0.1:${device.port}`, host], {
+    // Use the same control options to reuse the master connection
+    const subprocess = execa('ssh', [
+      ...this.getSshControlOptions(),
+      '-N', 
+      '-L', `${localPort}:127.0.0.1:${device.port}`, 
+      host
+    ], {
       detached: true, // Keep running
       stdio: 'ignore'
     });
