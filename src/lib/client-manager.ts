@@ -42,13 +42,13 @@ export class ClientManager {
       // Combine commands to ensure single authentication and establish master connection
       // Try 'adb-remote list --json' OR 'cat .remote-adb.json'
       const cmd = 'adb-remote list --json || cat .remote-adb.json';
-      
+
       const { stdout } = await execa('ssh', [
         ...this.getSshControlOptions(),
-        host, 
+        host,
         cmd
       ]);
-      
+
       return JSON.parse(stdout);
     } catch (error: any) {
       console.error(chalk.red(`Failed to fetch devices from ${host}.`));
@@ -65,30 +65,53 @@ export class ClientManager {
     let localPort = device.port;
     // Check if port is taken? Net check would be better, but let's try blindly or use a helper.
     // For simplicity, we try to match remote port. 
-    
+
     // Start SSH Tunnel
     // ssh -N -L <local>:127.0.0.1:<remote> <host>
     console.log(chalk.dim(`  Starting tunnel ${localPort} -> ${device.port}...`));
-    
+
     // Use the same control options to reuse the master connection
     const subprocess = execa('ssh', [
       ...this.getSshControlOptions(),
-      '-N', 
-      '-L', `${localPort}:127.0.0.1:${device.port}`, 
+      '-N',
+      '-L', `${localPort}:127.0.0.1:${device.port}`,
       host
     ], {
       detached: true, // Keep running
       stdio: 'ignore'
     });
-    
+
     subprocess.unref(); // Let it run in background
-    
+
     // Wait a bit for tunnel to establish
     await new Promise(r => setTimeout(r, 2000));
 
+    // Check if tunnel process is still alive
+    if (subprocess.exitCode !== null) {
+      console.error(chalk.red(`  SSH tunnel failed to start (Exit Code: ${subprocess.exitCode})`));
+      return {
+        serial: device.serial,
+        localPort,
+        remotePort: device.port,
+        host,
+        pid: undefined
+      };
+    }
+
     // ADB Connect
     console.log(chalk.dim(`  adb connect localhost:${localPort}...`));
-    await execa('adb', ['connect', `localhost:${localPort}`]);
+    try {
+      const result = await execa('adb', ['connect', `localhost:${localPort}`]);
+      console.log(chalk.dim('  ADB Output:'), result.stdout);
+
+      if (result.stdout.includes('connected to')) {
+        console.log(chalk.green(`  Successfully connected to ${device.serial} on port ${localPort}`));
+      } else {
+        console.log(chalk.yellow(`  ADB might not have connected successfully. Check output above.`));
+      }
+    } catch (e: any) {
+      console.error(chalk.red('  ADB Connect Failed:'), e.stderr || e.message);
+    }
 
     return {
       serial: device.serial,
@@ -101,11 +124,11 @@ export class ClientManager {
 
   async disconnectDevice(tunnel: ActiveTunnel) {
     console.log(chalk.dim(`  Disconnecting ${tunnel.serial}...`));
-    
+
     // ADB Disconnect
     try {
       await execa('adb', ['disconnect', `localhost:${tunnel.localPort}`]);
-    } catch {}
+    } catch { }
 
     // Kill SSH Tunnel
     if (tunnel.pid) {
@@ -115,7 +138,7 @@ export class ClientManager {
         // Process might already be gone
       }
     }
-    
+
     // Also try pkill pattern if pid is lost or unreliable? 
     // For now rely on PID.
   }
