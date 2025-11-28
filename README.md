@@ -22,6 +22,14 @@
 
 This tool allows you to **serve** devices from one machine (the Gateway) and **connect** to them from another (the Client) as if they were plugged directly into your USB port. It automates the complexity of SSH tunneling, ADB port forwarding, and connection management.
 
+## 📖 The Story
+
+Back when I was a novice Android developer, I constantly heard the dreaded phrase from QA: "It doesn't run properly on my device." 😢 Just when I'd fix it there, the PM would say, "It's broken on mine!"
+
+In the Android world, device fragmentation is a daily struggle. I used to dream that one day I'd own every phone in existence and test on every single one of them before submitting a build. 😂
+
+Of course, carrying 15 different devices around isn't practical. This tool is my attempt to realize that vision. With `adb-remote`, I can leave my device lab at home and still test on everything, from anywhere.
+
 ## ✨ Features
 
 - 🔌 **Plug & Play Serving:** Automatically detects USB devices and sets up ADB over TCP/IP.
