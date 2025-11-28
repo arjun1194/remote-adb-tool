@@ -1,0 +1,40 @@
+{
+  "name": "remote-adb-tool",
+  "version": "1.0.0",
+  "description": "Remote ADB Gateway and Client",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "adb-remote": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "package": "pkg . --targets node18-macos-x64,node18-macos-arm64 --output adb-remote"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^12.1.0",
+    "execa": "^9.6.0",
+    "fs-extra": "^11.3.0",
+    "prompts": "^2.4.2",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.10.1",
+    "@types/prompts": "^2.4.9",
+    "@types/ssh2": "^1.15.4",
+    "pkg": "^5.8.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "assets": []
+  }
+}

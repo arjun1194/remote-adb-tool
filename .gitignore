@@ -1,0 +1,9 @@
+node_modules/
+dist/
+adb-remote
+adb-remote-x64
+adb-remote-arm64
+*.zip
+*.log
+.DS_Store
+.env
