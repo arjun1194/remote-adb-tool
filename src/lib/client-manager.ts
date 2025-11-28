@@ -30,17 +30,21 @@ export class ClientManager {
 
   async fetchRemoteDevices(host: string): Promise<ExposedDevice[]> {
     try {
-      // We assume 'adb-remote' is in the PATH on the remote machine.
-      // If not, we might need to ask user or assume a path.
-      // For now, assume it's global or aliased.
-      // Use 'adb-remote' command.
+      // Try using the CLI first
       const { stdout } = await execa('ssh', [host, 'adb-remote list --json']);
       return JSON.parse(stdout);
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to fetch devices from ${host}.`));
-      console.error(chalk.yellow('Debug Info:'));
-      console.error(error.stderr || error.message);
-      return [];
+    } catch (cliError: any) {
+      // If 'adb-remote' is not in PATH (common in non-interactive SSH),
+      // fallback to reading the state file directly.
+      try {
+        const { stdout } = await execa('ssh', [host, 'cat .remote-adb.json']);
+        return JSON.parse(stdout);
+      } catch (fileError: any) {
+        console.error(chalk.red(`Failed to fetch devices from ${host}.`));
+        console.error(chalk.yellow('Debug Info (CLI):'), cliError.stderr || cliError.message);
+        console.error(chalk.yellow('Debug Info (File):'), fileError.stderr || fileError.message);
+        return [];
+      }
     }
   }
 
